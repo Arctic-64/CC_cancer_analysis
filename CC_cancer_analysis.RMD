@@ -1,0 +1,115 @@
+---
+title: "CC_borders_cancer_analysis.RMD"
+output: html_document
+date: '2022-05-07'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(janitor)
+library(here)
+library(ggplot2)
+library(stringr)
+```
+
+
+data loading and preperation
+```{r}
+incident_hb_5year <- clean_names(read_csv(here("data/5 Year Summary of Incidence by Health Board/e8d33b2b-1fb2-4d59-ad21-20fa2f76d9d5.csv")))
+HB_labels <- clean_names(read.csv(here("data/geography_codes_and_labels_hb2014_01042019.csv")))
+incident_hb_5year <- incident_hb_5year %>% left_join(HB_labels, "hb")
+```
+data analysis
+
+```{r}
+incident_hb_5year %>% filter(cancer_site == "All cancer types", sex == "All") -> all_region_cancer
+  
+  ggplot(all_region_cancer) +
+  geom_col() + 
+  aes(y = crude_rate, x = reorder(hb_name, crude_rate), fill = hb_name == "NHS Borders") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("blue", "red"), guide = "none") +
+  labs(x = "Health Board", 
+       y = "Number of Cases (standerdised)"
+  )
+```
+
+
+observation: the borders has a higher than avarage rate of cancer per capita, however this is a raw number and not inclusive of age.
+```{r}
+incident_hb_5year %>% filter(cancer_site == "All cancer types", sex == "All") -> all_region_cancer
+  
+  ggplot(all_region_cancer) +
+  geom_col() + 
+  aes(y = standardised_incidence_ratio, x = reorder(hb_name, standardised_incidence_ratio), fill = hb_name == "NHS Borders") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_fill_manual(values = c("blue", "red"), guide = "none") +
+  labs(x = "Health Board", 
+       y = "Number of Cases (standerdised)"
+  )
+```
+
+
+observation: when standeridiseing for age, the rates are significantly lower relative to the other regions of scotland
+
+
+
+```{r}
+incident_hb_5year %>%
+  rename(incidences_age05to09 = incidences_age5to9) %>%
+  rename(incidences_age00to05 = incidences_age_under5) %>%
+  filter(hb_name == "NHS Borders", cancer_site == "All cancer types", sex %in% c("Male", "Female")) %>%
+  select(cancer_site, sex, starts_with("incidences_age")) %>%
+  pivot_longer(-c(cancer_site, sex), names_to = "ages", values_to = "occurances") %>%
+  mutate(ages = str_remove_all(ages, "incidences_age")) %>%
+  group_by(ages)-> age_data
+
+  ggplot(age_data) +
+  aes(x = ages, y = occurances, fill = sex) +
+  geom_col(position = "dodge") +
+      theme(axis.text.x = element_text(angle = 45)) +
+  labs(x = "Age", 
+       y = "Number of occurances"
+  )
+
+```
+
+
+observation: cancer in the borders is more prevalent among women however later in life men with the exception of a male spike dureing infancy which may be an anomily
+
+
+```{r}
+incident_hb_5year %>%
+ filter(hb_name == "NHS Borders", cancer_site != "All cancer types", sex == "Male") %>% 
+  slice_max(incidences_all_ages, n = 10, with_ties = TRUE) %>%
+  select(cancer_site, incidences_all_ages) %>% 
+  rename(top_10_male = cancer_site, incidences_male = incidences_all_ages) -> top_10
+
+incident_hb_5year %>%
+ filter(hb_name == "NHS Borders", cancer_site != "All cancer types", sex == "Female") %>% 
+  slice_max(incidences_all_ages, n = 10, with_ties = TRUE) %>%
+  select(cancer_site, incidences_all_ages) %>% 
+  rename(top_10_female = cancer_site, incidences_female = incidences_all_ages) %>% 
+  bind_cols(top_10) -> top_10
+
+top_10
+```
+
+```{r}
+common <- intersect(top_10$top_10_female, top_10$top_10_male)
+common
+```
+
+
+observation summary
+
+the borders has a higher than avarage rate of cancer per capita, however this is a raw number and not inclusive of age.
+when standeridiseing for age, the rates are significantly lower relative to the other regions of Scotland.
+cancer in the borders is more prevalent among women however later in life men with the exception of a male spike during infancy which may be an anomaly.
+as age increases, rates of cancer also increase, until the age of 75 wherein mortality may be significantly reducing the population available to get cancer
+men and women in the borders share 7 and have 3 unique cancer diagnosis in their respective top 10 most common cancer diagnosis which could be an indicator for future treatment volumes of specific cancer types.
+
